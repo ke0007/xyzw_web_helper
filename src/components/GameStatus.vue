@@ -11,20 +11,21 @@
       <n-tab-pane v-if="ENABLE_TOOLS_TAB" name="tools" tab="工具" />
     </n-tabs>
 
-    <!-- 阵容（仅日常） -->
-    <TeamFormation v-show="activeSection === 'daily'" />
 
     <!-- 每日任务状态（仅日常） -->
     <DailyTaskStatus v-show="activeSection === 'daily'" />
-
-    <!-- 咸将塔状态 -->
-    <TowerStatus v-show="activeSection === 'daily' && isShowTowerStatus" />
 
     <!-- 盐罐机器人状态（提取组件） -->
     <BottleHelperCard v-show="activeSection === 'daily'" />
 
     <!-- 挂机状态（提取组件） -->
     <HangUpStatusCard v-show="activeSection === 'daily'" />
+
+    <!-- 阵容（仅日常） -->
+    <TeamFormation v-show="activeSection === 'daily'" />
+
+    <!-- 咸将塔状态 -->
+    <TowerStatus v-show="activeSection === 'daily' && isShowTowerStatus" />
 
     <!-- 宝箱助手（提取组件） -->
     <BoxHelperCard v-show="activeSection === 'tools'" />
@@ -91,14 +92,16 @@
     </div>
 
     <!-- 俱乐部信息与疯狂赛车（同级卡片，仅俱乐部分区） -->
-    <ClubInfo v-if="activeSection === 'club'" />
     <ClubCarKing v-if="activeSection === 'club'" />
+    <ClubInfo v-if="activeSection === 'club'" />
 
-    <!-- 月度任务进度（提取组件） -->
-    <MonthlyTasksCard v-show="activeSection === 'activity'" />
 
     <!-- 咸鱼大冲关（提取组件） -->
     <StudyChallengeCard v-show="activeSection === 'activity'" />
+    <!-- 月度任务进度（提取组件） -->
+    <MonthlyTasksCard v-show="activeSection === 'activity'" />
+
+
   </div>
 </template>
 

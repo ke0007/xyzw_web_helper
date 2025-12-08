@@ -33,6 +33,18 @@
       </div>
     </div>
 
+    <!-- 移动端 Token 选择 -->
+    <div class="container mobile-token-select">
+      <n-select
+        v-model:value="currentTokenId"
+        size="small"
+        class="token-select"
+        :options="tokenOptions"
+        placeholder="请选择要连接的 Token"
+        @update:value="handleSelectToken"
+      />
+    </div>
+
     <!-- 反馈提示区域 -->
     <div
       v-if="showFeedback"
@@ -414,6 +426,11 @@ onUnmounted(() => {
   width: 96px; /* 约等于“游戏功能”宽度 */
 }
 
+.mobile-token-select {
+  display: none;
+  padding: var(--spacing-md) 0;
+}
+
 .connection-status {
   display: flex;
   align-items: center;
@@ -652,6 +669,14 @@ onUnmounted(() => {
 @media (max-width: 768px) {
   .container {
     padding: 0 var(--spacing-md);
+  }
+
+  .page-header {
+    display: none;
+  }
+
+  .mobile-token-select {
+    display: block;
   }
 
   .header-content {
