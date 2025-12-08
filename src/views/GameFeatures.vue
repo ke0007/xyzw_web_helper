@@ -8,9 +8,16 @@
             <h1 class="page-title">
               游戏功能
             </h1>
-            <p class="page-subtitle">
-              {{ tokenStore.selectedToken?.name || '未选择Token' }}
-            </p>
+            <div class="page-subtitle">
+              <n-select
+                v-model:value="currentTokenId"
+                size="small"
+                class="token-select"
+                :options="tokenOptions"
+                placeholder="请选择要连接的 Token"
+                @update:value="handleSelectToken"
+              />
+            </div>
           </div>
 
           <div class="header-actions">
@@ -93,12 +100,20 @@ const tokenStore = useTokenStore()
 // 响应式数据
 const showFeedback = ref(true)
 const lastActivity = ref(null)
+const currentTokenId = ref(tokenStore.selectedToken?.id || null)
 
 // 计算属性
 const connectionStatus = computed(() => {
   if (!tokenStore.selectedToken) return 'disconnected'
   const status = tokenStore.getWebSocketStatus(tokenStore.selectedToken.id)
   return status === 'connected' ? 'connected' : 'disconnected'
+})
+
+const tokenOptions = computed(() => {
+  return tokenStore.gameTokens.map(t => ({
+    label: t.name || t.id,
+    value: t.id
+  }))
 })
 
 const connectionStatusText = computed(() => {
@@ -258,6 +273,21 @@ const toggleConnection = () => {
 
 // handleWebSocketMessage 已移除，消息处理由 tokenStore 负责
 
+// 选择并连接 Token
+const handleSelectToken = (tokenId) => {
+  if (!tokenId) {
+    message.warning('请选择一个 Token')
+    return
+  }
+  const token = tokenStore.selectToken(tokenId, true)
+  if (token) {
+    currentTokenId.value = tokenId
+    message.success(`已切换到：${token.name}`)
+  } else {
+    message.error('切换 Token 失败')
+  }
+}
+
 // 生命周期
 onMounted(() => {
   // 检查是否需要连接 WebSocket
@@ -271,6 +301,14 @@ onMounted(() => {
     }
   }
 })
+
+// 同步下拉选中值
+watch(
+  () => tokenStore.selectedToken?.id,
+  (id) => {
+    currentTokenId.value = id || null
+  }
+)
 
 // 监听当前选中 Token 的连接错误（如 token 过期）并给出明确提示
 watch(
@@ -370,6 +408,10 @@ onUnmounted(() => {
   color: var(--text-secondary);
   font-size: var(--font-size-md);
   margin: 0;
+}
+
+.token-select {
+  width: 96px; /* 约等于“游戏功能”宽度 */
 }
 
 .connection-status {
