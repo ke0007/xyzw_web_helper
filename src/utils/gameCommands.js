@@ -208,7 +208,7 @@ export class GameCommands {
     return {
       ack,
       body: this.g_utils.bon.encode({
-        battleVersion: 240475,
+        battleVersion: 240476,
         ...params
       }),
       cmd: "fight_startareaarena",

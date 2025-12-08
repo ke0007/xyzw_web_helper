@@ -1,17 +1,13 @@
 <template>
   <div class="token-import-page">
+<!--    <AppNav />-->
     <div class="container">
       <!-- 页面头部 -->
-      <div class="page-header">
+<!--      <div class="page-header">
         <div class="header-content">
-          <div class="header-top">
-            <img src="/icons/xiaoyugan.png" alt="XYZW" class="brand-logo">
-            <!-- 主题切换按钮 -->
-            <ThemeToggle />
-          </div>
           <h1>游戏Token管理</h1>
         </div>
-      </div>
+      </div>-->
 
       <!-- Token导入区域 -->
       <a-modal v-model:visible="showImportForm" width="40rem" :footer="false" :default-visible="!tokenStore.hasTokens">
@@ -715,11 +711,11 @@ const startTaskManagement = async (token) => {
     const connectionStatus = getConnectionStatus(token.id)
 
     if (connectionStatus === 'connected') {
-      // 已连接，直接跳转
-      message.success(`${token.name} 已连接，进入任务管理`)
-      router.push('/admin/dashboard')
-      return
+      message.success(`${token.name} 已连接，进入游戏功能页`)
+    } else {
+      message.info(`${token.name} 正在连接，已跳转游戏功能页`)
     }
+    router.push('/admin/game-features')
 
   } finally {
     connectingTokens.value.delete(token.id)

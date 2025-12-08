@@ -209,7 +209,7 @@ const logContainer = ref(null)
 const settings = reactive({
   arenaFormation: 1,
   bossFormation: 1,
-  bossTimes: 2,
+  bossTimes: 4,
   claimBottle: true,
   payRecruit: true,
   openBox: true,
@@ -509,14 +509,7 @@ const executeDailyTasks = async (roleInfoResp, logFn, progressFn) => {
 
   // 挂机奖励 (任务ID: 5)
   if (!isTaskCompleted(5) && settings.claimHangUp) {
-    // 先加钟4次
-    for (let i = 0; i < 4; i++) {
-      taskList.push({
-        name: `挂机加钟 ${i + 1}/4`,
-        execute: () => executeGameCommand(tokenId, 'system_mysharecallback',
-          { isSkipShareCard: true, type: 2 }, `挂机加钟 ${i + 1}`)
-      })
-    }
+
 
     // 然后领取奖励
     taskList.push({
@@ -524,12 +517,21 @@ const executeDailyTasks = async (roleInfoResp, logFn, progressFn) => {
       execute: () => executeGameCommand(tokenId, 'system_claimhangupreward', {}, '领取挂机奖励')
     })
 
+    // 先加钟4次
+    for (let i = 0; i < 4; i++) {
+      taskList.push({
+        name: `挂机加钟 ${i + 1}/4`,
+        execute: () => executeGameCommand(tokenId, 'system_mysharecallback',
+            { isSkipShareCard: true, type: 2 }, `挂机加钟 ${i + 1}`)
+      })
+    }
+
     // 最后再加1次钟
-    taskList.push({
-      name: '挂机加钟 5/5',
-      execute: () => executeGameCommand(tokenId, 'system_mysharecallback',
-        { isSkipShareCard: true, type: 2 }, '挂机加钟 5')
-    })
+    // taskList.push({
+    //   name: '挂机加钟 5/5',
+    //   execute: () => executeGameCommand(tokenId, 'system_mysharecallback',
+    //     { isSkipShareCard: true, type: 2 }, '挂机加钟 5')
+    // })
   }
 
   // 开宝箱 (任务ID: 7)
@@ -546,6 +548,14 @@ const executeDailyTasks = async (roleInfoResp, logFn, progressFn) => {
     taskList.push({
       name: '领取盐罐奖励',
       execute: () => executeGameCommand(tokenId, 'bottlehelper_claim', {}, '领取盐罐奖励')
+    })
+    taskList.push({
+      name: '停止盐罐',
+      execute: () => executeGameCommand(tokenId, 'bottlehelper_stop', {}, '停止盐罐')
+    })
+    taskList.push({
+      name: '开始盐罐',
+      execute: () => executeGameCommand(tokenId, 'bottlehelper_start', {}, '开始盐罐')
     })
   }
 
@@ -697,6 +707,10 @@ const executeDailyTasks = async (roleInfoResp, logFn, progressFn) => {
   // 6. 黑市购买任务 (任务ID: 12)
   if (!isTaskCompleted(12) && settings.blackMarketPurchase) {
     taskList.push({
+      name: '购买青铜宝箱',
+      execute: () => executeGameCommand(tokenId, 'store_buy', { goodsId: 1 }, '购买青铜宝箱')
+    })
+    taskList.push({
       name: '黑市购买1次物品',
       execute: () => executeGameCommand(tokenId, 'store_purchase', { goodsId: 1 }, '黑市购买1次物品')
     })
@@ -738,7 +752,7 @@ const executeDailyTasks = async (roleInfoResp, logFn, progressFn) => {
       if (progressFn) progressFn(tokenId, progress)
 
       // 任务间隔
-      await new Promise(resolve => setTimeout(resolve, 500))
+      await new Promise(resolve => setTimeout(resolve, 200))
 
     } catch (error) {
       logFn(`任务执行失败: ${task.name} - ${error.message}`, 'error')

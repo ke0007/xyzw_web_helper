@@ -7,29 +7,30 @@ const generatedRoutes = autoRoutes.routes ?? [];
 const my_routes = [
   {
     path: '/',
-    name: 'Home',
-    component: () => import('@/views/Home.vue'),
-    meta: {
-      title: '首页',
-      requiresToken: false
-    }
+    redirect: '/tokens'
   },
   {
     path: '/tokens',
-    name: 'TokenImport',
-    component: () => import('@/views/TokenImport/index.vue'),
-    meta: {
-      title: 'Token管理',
-      requiresToken: false
-    },
-    props: route => ({
-      token: route.query.token,
-      name: route.query.name,
-      server: route.query.server,
-      wsUrl: route.query.wsUrl,
-      api: route.query.api,
-      auto: route.query.auto === 'true'
-    })
+    component: () => import('@/layout/DefaultLayout.vue'),
+    children: [
+      {
+        path: '',
+        name: 'TokenImport',
+        component: () => import('@/views/TokenImport/index.vue'),
+        meta: {
+          title: 'Token管理',
+          requiresToken: false
+        },
+        props: route => ({
+          token: route.query.token,
+          name: route.query.name,
+          server: route.query.server,
+          wsUrl: route.query.wsUrl,
+          api: route.query.api,
+          auto: route.query.auto === 'true'
+        })
+      }
+    ]
   },
   {
     name: 'DefaultLayout',

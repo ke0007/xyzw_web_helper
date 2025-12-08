@@ -213,6 +213,16 @@ export const useTokenStore = defineStore('tokens', () => {
     return true
   }
 
+  // 断开非当前选中Token的连接，确保单连接模式
+  const disconnectOtherConnections = (targetTokenId: string) => {
+    Object.keys(wsConnections.value).forEach(id => {
+      if (id !== targetTokenId && wsConnections.value[id]) {
+        wsLogger.info(`断开其他Token连接: ${id}`)
+        closeWebSocketConnection(id)
+      }
+    })
+  }
+
   const selectToken = (tokenId: string, forceReconnect = false) => {
     const token = gameTokens.value.find(t => t.id === tokenId)
     if (!token) {
@@ -234,6 +244,9 @@ export const useTokenStore = defineStore('tokens', () => {
 
     // 更新选中状态
     selectedTokenId.value = tokenId
+
+    // 选中新的Token后，断开其他已存在的连接，保证单一连接
+    disconnectOtherConnections(tokenId)
 
     // 更新最后使用时间
     updateToken(tokenId, { lastUsed: new Date().toISOString() })

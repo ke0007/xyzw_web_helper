@@ -14,29 +14,17 @@
       </div>
 
         <div class="nav-menu">
-          <router-link to="/admin/dashboard" class="nav-item" active-class="active">
-            <n-icon>
-              <Home />
-            </n-icon>
-            <span>首页</span>
-          </router-link>
-          <router-link to="/admin/game-features" class="nav-item" active-class="active">
-            <n-icon>
-              <Cube />
-            </n-icon>
-            <span>游戏功能</span>
-          </router-link>
           <router-link to="/tokens" class="nav-item" active-class="active">
             <n-icon>
               <PersonCircle />
             </n-icon>
             <span>Token管理</span>
           </router-link>
-          <router-link to="/admin/daily-tasks" class="nav-item" active-class="active">
+          <router-link to="/admin/game-features" class="nav-item" active-class="active">
             <n-icon>
-              <Settings />
+              <Cube />
             </n-icon>
-            <span>任务管理</span>
+            <span>游戏功能</span>
           </router-link>
           <router-link to="/admin/message-test" class="nav-item" active-class="active">
             <n-icon>
@@ -70,21 +58,13 @@
     </nav>
     <n-drawer v-model:show="isMobileMenuOpen" placement="left" style="width: 260px">
       <div class="drawer-menu">
-        <router-link to="/admin/dashboard" class="drawer-item" @click="isMobileMenuOpen = false">
-          <n-icon><Home /></n-icon>
-          <span>首页</span>
-        </router-link>
-        <router-link to="/admin/game-features" class="drawer-item" @click="isMobileMenuOpen = false">
-          <n-icon><Cube /></n-icon>
-          <span>游戏功能</span>
-        </router-link>
         <router-link to="/tokens" class="drawer-item" @click="isMobileMenuOpen = false">
           <n-icon><PersonCircle /></n-icon>
           <span>Token管理</span>
         </router-link>
-        <router-link to="/admin/daily-tasks" class="drawer-item" @click="isMobileMenuOpen = false">
-          <n-icon><Settings /></n-icon>
-          <span>任务管理</span>
+        <router-link to="/admin/game-features" class="drawer-item" @click="isMobileMenuOpen = false">
+          <n-icon><Cube /></n-icon>
+          <span>游戏功能</span>
         </router-link>
         <router-link to="/admin/message-test" class="drawer-item" @click="isMobileMenuOpen = false">
           <n-icon><ChatbubbleEllipsesSharp /></n-icon>
