@@ -26,6 +26,12 @@
             </n-icon>
             <span>游戏功能</span>
           </router-link>
+          <router-link to="/admin/batch-tasks" class="nav-item" active-class="active">
+            <n-icon>
+              <List />
+            </n-icon>
+            <span>批量任务</span>
+          </router-link>
           <router-link to="/admin/message-test" class="nav-item" active-class="active">
             <n-icon>
               <ChatbubbleEllipsesSharp />
@@ -66,6 +72,10 @@
           <n-icon><Cube /></n-icon>
           <span>游戏功能</span>
         </router-link>
+        <router-link to="/admin/batch-tasks" class="drawer-item" @click="isMobileMenuOpen = false">
+          <n-icon><List /></n-icon>
+          <span>批量任务</span>
+        </router-link>
         <router-link to="/admin/message-test" class="drawer-item" @click="isMobileMenuOpen = false">
           <n-icon><ChatbubbleEllipsesSharp /></n-icon>
           <span>消息测试</span>
@@ -92,7 +102,8 @@ import {
   Settings,
   ChevronDown,
   ChatbubbleEllipsesSharp,
-  Menu
+  Menu,
+  List
 } from '@vicons/ionicons5'
 
 

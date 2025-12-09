@@ -56,6 +56,15 @@ const my_routes = [
         }
       },
       {
+        path: 'batch-tasks',
+        name: 'BatchTasks',
+        component: () => import('@/views/BatchTasks.vue'),
+        meta: {
+          title: '批量任务',
+          requiresToken: true
+        }
+      },
+      {
         path: 'message-test',
         name: 'MessageTest',
         component: () => import('@/components/Test/MessageTester.vue'),
