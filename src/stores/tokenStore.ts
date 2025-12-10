@@ -64,6 +64,7 @@ export const useTokenStore = defineStore('tokens', () => {
 
   const wsConnections = ref<WebCtx>({}) // WebSocket连接状态
   const connectionLocks = ref<LockCtx>({}) // 连接操作锁，防止竞态条件
+  const tokenRefreshFlags = ref<Record<string, boolean>>({}) // Token刷新标志，防止重复处理
 
   // 游戏数据存储
   const gameData = ref({
@@ -235,11 +236,13 @@ export const useTokenStore = defineStore('tokens', () => {
     const existingConnection = wsConnections.value[tokenId]
     const isConnected = existingConnection?.status === 'connected'
     const isConnecting = existingConnection?.status === 'connecting'
+    const isError = existingConnection?.status === 'error'
 
     tokenLogger.debug(`选择Token: ${tokenId}`, {
       isAlreadySelected,
       isConnected,
       isConnecting,
+      isError,
       forceReconnect
     })
 
@@ -252,16 +255,30 @@ export const useTokenStore = defineStore('tokens', () => {
     // 更新最后使用时间
     updateToken(tokenId, { lastUsed: new Date().toISOString() })
 
+    // 如果是错误状态，清除错误并准备重连
+    if (isError && !forceReconnect) {
+      wsLogger.info(`Token处于错误状态，清除错误并尝试重连: ${tokenId}`)
+      // 清除错误状态，给予重连机会
+      if (existingConnection) {
+        existingConnection.status = 'disconnected'
+        existingConnection.lastError = null
+      }
+      // 清除刷新标志，允许重新刷新
+      delete tokenRefreshFlags.value[tokenId]
+    }
+
     // 智能连接判断
     const shouldCreateConnection =
       forceReconnect ||                    // 强制重连
       (!isAlreadySelected) ||              // 首次选择此token
       (!existingConnection) ||             // 没有现有连接
       (existingConnection.status === 'disconnected') ||  // 连接已断开
-      (existingConnection.status === 'error')            // 连接出错
+      (existingConnection.status === 'error')            // 连接出错（已清除，可以重试）
 
     if (shouldCreateConnection) {
-      if (isAlreadySelected && !forceReconnect) {
+      if (isAlreadySelected && !forceReconnect && isError) {
+        wsLogger.info(`Token从错误状态恢复，重新连接: ${tokenId}`)
+      } else if (isAlreadySelected && !forceReconnect) {
         wsLogger.info(`Token已选中但无连接，创建新连接: ${tokenId}`)
       } else if (!isAlreadySelected) {
         wsLogger.info(`切换到新Token，创建连接: ${tokenId}`)
@@ -284,6 +301,59 @@ export const useTokenStore = defineStore('tokens', () => {
     return token
   }
 
+  // Token自动刷新并重连
+  const refreshTokenAndReconnect = async (tokenId: string) => {
+    // 防止重复刷新
+    if (tokenRefreshFlags.value[tokenId]) {
+      wsLogger.debug(`Token正在刷新中，跳过重复操作 [${tokenId}]`)
+      return false
+    }
+
+    tokenRefreshFlags.value[tokenId] = true
+
+    try {
+      const gameToken = gameTokens.value.find(t => t.id === tokenId)
+      if (!gameToken) {
+        wsLogger.error(`未找到Token信息 [${tokenId}]`)
+        return false
+      }
+
+      wsLogger.info(`尝试从IndexedDB刷新Token [${gameToken.name}]`)
+      const userToken: ArrayBuffer | null = await getArrayBuffer(gameToken.name)
+      
+      if (userToken) {
+        const newToken = await transformToken(userToken)
+        updateToken(tokenId, { ...gameToken, token: newToken })
+        wsLogger.info(`Token刷新成功，准备重新连接 [${gameToken.name}]`)
+        
+        // 等待一小段时间，确保token更新已完成
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
+        // 自动重新连接
+        const updatedToken = gameTokens.value.find(t => t.id === tokenId)
+        if (updatedToken) {
+          wsLogger.info(`开始自动重连 [${gameToken.name}]`)
+          await closeWebSocketConnectionAsync(tokenId)
+          await new Promise(resolve => setTimeout(resolve, 1000))
+          createWebSocketConnection(tokenId, updatedToken.token, updatedToken.wsUrl)
+          return true
+        }
+      } else {
+        wsLogger.warn(`IndexedDB中未找到Token数据 [${gameToken.name}]`)
+      }
+      
+      return false
+    } catch (error) {
+      wsLogger.error(`Token刷新失败 [${tokenId}]:`, error)
+      return false
+    } finally {
+      // 5秒后清除刷新标志，允许再次刷新
+      setTimeout(() => {
+        delete tokenRefreshFlags.value[tokenId]
+      }, 5000)
+    }
+  }
+
   // 游戏消息处理
   const handleGameMessage = async (tokenId: string, message: ProtoMsg, client: any) => {
     try {
@@ -291,30 +361,46 @@ export const useTokenStore = defineStore('tokens', () => {
         gameLogger.warn(`消息处理跳过 [${tokenId}]: 无效消息`);
         return;
       }
+      
       if (message.error) {
         const errText = String(message.error).toLowerCase()
-        gameLogger.warn(`消息处理跳过 [${tokenId}]:`, message.error)
-        if (errText.includes('token') && errText.includes('expired')) {
+        const originalError = String(message.error)
+        gameLogger.warn(`消息错误 [${tokenId}]:`, originalError)
+        
+        // 更严格的token过期判断：必须是明确的token过期错误
+        const isTokenExpired = (
+          (errText.includes('token') && errText.includes('expired')) ||
+          (errText.includes('token') && errText.includes('invalid')) ||
+          errText.includes('authentication failed') ||
+          errText.includes('unauthorized')
+        )
+        
+        if (isTokenExpired) {
           const conn = wsConnections.value[tokenId]
           if (conn) {
-            conn.status = 'error'
-            conn.lastError = { timestamp: new Date().toISOString(), error: 'token expired' }
-          }
-
-          const gameToken = gameTokens.value.find(t => t.id === tokenId)
-          console.log(gameToken)
-          if (gameToken) {
-            console.log('getArrayBuffer', await getArrayBuffer('小鱼'));
-            const userToken: ArrayBuffer | null = await getArrayBuffer(gameToken.name)
-            console.log('读取到的ArrayBuffer:', gameToken.name, userToken)
-            if (userToken) {
-              const token = await transformToken(userToken)
-              updateToken(tokenId, { ...gameToken, token })
-              console.log(gameToken)
+            // 先不立即标记为error，而是标记为即将刷新
+            wsLogger.warn(`检测到Token可能过期，尝试自动刷新 [${tokenId}]`)
+            
+            // 尝试自动刷新token并重连
+            const refreshSuccess = await refreshTokenAndReconnect(tokenId)
+            
+            if (!refreshSuccess) {
+              // 刷新失败，才标记为error
+              conn.status = 'error'
+              conn.lastError = { 
+                timestamp: new Date().toISOString(), 
+                error: 'token expired - refresh failed' 
+              }
+              wsLogger.error(`Token已过期且刷新失败，需要重新导入 [${tokenId}]`)
+            } else {
+              wsLogger.info(`Token已自动刷新并重连成功 [${tokenId}]`)
             }
           }
-          wsLogger.error(`Token 已过期，需要重新导入 [${tokenId}]`)
+        } else {
+          // 其他错误，不认为是token过期，只记录日志
+          gameLogger.debug(`非token过期错误，继续处理 [${tokenId}]:`, originalError)
         }
+        
         return;
       }
 

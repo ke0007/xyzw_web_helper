@@ -13,16 +13,16 @@
     </div>
 
     <!-- 移动端 Token 选择 -->
-    <div class="container mobile-token-select">
-      <n-select
-        v-model:value="currentTokenId"
-        size="small"
-        class="token-select"
-        :options="tokenOptions"
-        placeholder="请选择要连接的 Token"
-        @update:value="handleSelectToken"
-      />
-    </div>
+<!--    <div class="container mobile-token-select">-->
+<!--      <n-select-->
+<!--        v-model:value="currentTokenId"-->
+<!--        size="small"-->
+<!--        class="token-select"-->
+<!--        :options="tokenOptions"-->
+<!--        placeholder="请选择要连接的 Token"-->
+<!--        @update:value="handleSelectToken"-->
+<!--      />-->
+<!--    </div>-->
 
     <div class="container">
       <!-- Token选择区域 -->
@@ -189,7 +189,7 @@ const taskExecutor = useTaskExecutor()
 // 响应式数据
 const selectedTokenIds = ref([])
 const selectedTasks = ref([])
-const tokenInterval = ref(3) // Token间隔时间（秒）
+const tokenInterval = ref(1) // Token间隔时间（秒）
 const taskInterval = ref(1) // 任务间隔时间（秒）
 const isRunning = ref(false)
 const executionLogs = ref([])
@@ -213,26 +213,26 @@ const availableTasks = [
   {
     id: 'idle-time',
     name: '挂机加钟',
-    description: '领取挂机时间奖励',
+    description: '领取挂机加钟',
     command: 'system_claimhangupreward'
   },
   {
     id: 'study-answer',
     name: '答题',
-    description: '自动答题（启动答题游戏）',
+    description: '咸鱼大冲关答题',
     command: 'study_startgame'
   },
   {
     id: 'smart-car',
     name: '智能发车',
-    description: '智能发车（需先获取车辆列表）',
+    description: '俱乐部赛车一键发车',
     command: 'car_getrolecar',
     isComplex: true
   },
   {
     id: 'collect-car',
     name: '一键收车',
-    description: '一键收取车辆奖励（需先获取车辆列表）',
+    description: '俱乐部赛车一键发车',
     command: 'car_getrolecar',
     isComplex: true
   }
