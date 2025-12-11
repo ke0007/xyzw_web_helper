@@ -8,29 +8,6 @@ export function useTaskExecutor() {
   const tokenStore = useTokenStore()
 
   /**
-   * 执行游戏命令的封装
-   */
-  const executeGameCommand = async (
-    tokenId: string,
-    cmd: string,
-    params: any = {},
-    description: string = '',
-    timeout: number = 8000,
-    logFn?: (msg: string, type?: string) => void
-  ) => {
-    try {
-      if (description && logFn) logFn(`执行: ${description}`)
-      const result = await tokenStore.sendMessageWithPromise(tokenId, cmd, params, timeout)
-      await new Promise(resolve => setTimeout(resolve, 500))
-      if (description && logFn) logFn(`${description} - 成功`, 'success')
-      return result
-    } catch (error: any) {
-      if (description && logFn) logFn(`${description} - 失败: ${error.message}`, 'error')
-      throw error
-    }
-  }
-
-  /**
    * 辅助函数：检查是否今日可用
    */
   const isTodayAvailable = (statisticsTime: any) => {
@@ -65,54 +42,6 @@ export function useTaskExecutor() {
     return targets?.roleId || targets?.id
   }
 
-  /**
-   * 辅助函数：智能阵容切换
-   */
-  const switchToFormationIfNeeded = async (
-    tokenId: string,
-    targetFormation: number,
-    formationName: string,
-    logFn: (msg: string, type?: string) => void
-  ) => {
-    try {
-      // 首先尝试从本地缓存获取当前阵容信息
-      const cachedTeamInfo = tokenStore.gameData?.presetTeam?.presetTeamInfo
-      let currentFormation = cachedTeamInfo?.useTeamId
-
-      if (currentFormation) {
-        logFn(`从缓存获取当前阵容: ${currentFormation}`)
-      } else {
-        // 缓存中没有数据，从服务器获取
-        logFn(`缓存中无阵容信息，从服务器获取...`)
-        const teamInfo = await executeGameCommand(tokenId, 'presetteam_getinfo', {}, '获取阵容信息', 8000, logFn)
-        currentFormation = teamInfo?.presetTeamInfo?.useTeamId
-        logFn(`从服务器获取当前阵容: ${currentFormation}`)
-      }
-
-      if (currentFormation === targetFormation) {
-        logFn(`当前已是${formationName}${targetFormation}，无需切换`, 'success')
-        return false // 不需要切换
-      }
-
-      logFn(`当前阵容: ${currentFormation}, 目标阵容: ${targetFormation}，开始切换...`)
-      await executeGameCommand(tokenId, 'presetteam_saveteam',
-        { teamId: targetFormation }, `切换到${formationName}${targetFormation}`, 8000, logFn)
-
-      logFn(`成功切换到${formationName}${targetFormation}`, 'success')
-      return true // 已切换
-    } catch (error: any) {
-      logFn(`阵容检查失败，直接切换: ${error.message}`, 'warning')
-      // 如果检查失败，还是执行切换操作
-      try {
-        await executeGameCommand(tokenId, 'presetteam_saveteam',
-          { teamId: targetFormation }, `强制切换到${formationName}${targetFormation}`, 8000, logFn)
-        return true
-      } catch (fallbackError: any) {
-        logFn(`强制切换也失败: ${fallbackError.message}`, 'error')
-        throw fallbackError
-      }
-    }
-  }
 
   /**
    * 每日任务执行器（完整版）
@@ -149,6 +78,62 @@ export function useTaskExecutor() {
     }
     const finalSettings = { ...defaultSettings, ...settings }
 
+    // 创建本地 executeGameCommand 函数，自动使用 logFn（与 DailyTaskStatus.vue 保持一致）
+    const executeCmd = async (cmd: string, params: any = {}, description: string = '', timeout: number = 8000) => {
+      try {
+        if (description) logFn(`执行: ${description}`)
+        const result = await tokenStore.sendMessageWithPromise(tokenId, cmd, params, timeout)
+        await new Promise(resolve => setTimeout(resolve, 500))
+        if (description) logFn(`${description} - 成功`, 'success')
+        return result
+      } catch (error: any) {
+        if (description) logFn(`${description} - 失败: ${error.message}`, 'error')
+        throw error
+      }
+    }
+
+    // 智能阵容切换辅助函数（与 DailyTaskStatus.vue 保持一致）
+    const switchToFormation = async (targetFormation: number, formationName: string) => {
+      try {
+        // 首先尝试从本地缓存获取当前阵容信息
+        const cachedTeamInfo = tokenStore.gameData?.presetTeam?.presetTeamInfo
+        let currentFormation = cachedTeamInfo?.useTeamId
+
+        if (currentFormation) {
+          logFn(`从缓存获取当前阵容: ${currentFormation}`)
+        } else {
+          // 缓存中没有数据，从服务器获取
+          logFn(`缓存中无阵容信息，从服务器获取...`)
+          const teamInfo = await executeCmd('presetteam_getinfo', {}, '获取阵容信息')
+          currentFormation = teamInfo?.presetTeamInfo?.useTeamId
+          logFn(`从服务器获取当前阵容: ${currentFormation}`)
+        }
+
+        if (currentFormation === targetFormation) {
+          logFn(`当前已是${formationName}${targetFormation}，无需切换`, 'success')
+          return false // 不需要切换
+        }
+
+        logFn(`当前阵容: ${currentFormation}, 目标阵容: ${targetFormation}，开始切换...`)
+        await executeCmd('presetteam_saveteam',
+          { teamId: targetFormation }, `切换到${formationName}${targetFormation}`)
+
+        logFn(`成功切换到${formationName}${targetFormation}`, 'success')
+        return true // 已切换
+      } catch (error: any) {
+        logFn(`阵容检查失败，直接切换: ${error.message}`, 'warning')
+        // 如果检查失败，还是执行切换操作
+        try {
+          await executeCmd('presetteam_saveteam',
+            { teamId: targetFormation }, `强制切换到${formationName}${targetFormation}`)
+          return true
+        } catch (fallbackError: any) {
+          logFn(`强制切换也失败: ${fallbackError.message}`, 'error')
+          throw fallbackError
+        }
+      }
+    }
+
     try {
       // 1. 获取角色信息
       logFn('正在获取角色信息...', 'info')
@@ -181,8 +166,8 @@ export function useTaskExecutor() {
       if (!isTaskCompleted(2)) {
         taskList.push({
           name: '分享一次游戏',
-          execute: () => executeGameCommand(tokenId, 'system_mysharecallback',
-            { isSkipShareCard: true, type: 2 }, '分享游戏', 8000, logFn)
+          execute: () => executeCmd('system_mysharecallback',
+            { isSkipShareCard: true, type: 2 }, '分享游戏')
         })
       }
 
@@ -190,7 +175,7 @@ export function useTaskExecutor() {
       if (!isTaskCompleted(3)) {
         taskList.push({
           name: '赠送好友金币',
-          execute: () => executeGameCommand(tokenId, 'friend_batch', {}, '赠送好友金币', 8000, logFn)
+          execute: () => executeCmd('friend_batch', {}, '赠送好友金币')
         })
       }
 
@@ -198,15 +183,15 @@ export function useTaskExecutor() {
       if (!isTaskCompleted(4)) {
         taskList.push({
           name: '免费招募',
-          execute: () => executeGameCommand(tokenId, 'hero_recruit',
-            { recruitType: 3, recruitNumber: 1 }, '免费招募', 8000, logFn)
+          execute: () => executeCmd('hero_recruit',
+            { recruitType: 3, recruitNumber: 1 }, '免费招募')
         })
 
         if (finalSettings.payRecruit) {
           taskList.push({
             name: '付费招募',
-            execute: () => executeGameCommand(tokenId, 'hero_recruit',
-              { recruitType: 1, recruitNumber: 1 }, '付费招募', 8000, logFn)
+            execute: () => executeCmd('hero_recruit',
+              { recruitType: 1, recruitNumber: 1 }, '付费招募')
           })
         }
       }
@@ -216,8 +201,8 @@ export function useTaskExecutor() {
         for (let i = 0; i < 3; i++) {
           taskList.push({
             name: `免费点金 ${i + 1}/3`,
-            execute: () => executeGameCommand(tokenId, 'system_buygold',
-              { buyNum: 1 }, `免费点金 ${i + 1}`, 8000, logFn)
+            execute: () => executeCmd('system_buygold',
+              { buyNum: 1 }, `免费点金 ${i + 1}`)
           })
         }
       }
@@ -227,15 +212,15 @@ export function useTaskExecutor() {
         // 先领取奖励
         taskList.push({
           name: '领取挂机奖励',
-          execute: () => executeGameCommand(tokenId, 'system_claimhangupreward', {}, '领取挂机奖励', 8000, logFn)
+          execute: () => executeCmd('system_claimhangupreward', {}, '领取挂机奖励')
         })
 
         // 然后加钟4次
         for (let i = 0; i < 4; i++) {
           taskList.push({
             name: `挂机加钟 ${i + 1}/4`,
-            execute: () => executeGameCommand(tokenId, 'system_mysharecallback',
-              { isSkipShareCard: true, type: 2 }, `挂机加钟 ${i + 1}`, 8000, logFn)
+            execute: () => executeCmd('system_mysharecallback',
+              { isSkipShareCard: true, type: 2 }, `挂机加钟 ${i + 1}`)
           })
         }
       }
@@ -244,8 +229,8 @@ export function useTaskExecutor() {
       if (!isTaskCompleted(7) && finalSettings.openBox) {
         taskList.push({
           name: '开启木质宝箱',
-          execute: () => executeGameCommand(tokenId, 'item_openbox',
-            { itemId: 2001, number: 10 }, '开启木质宝箱10个', 8000, logFn)
+          execute: () => executeCmd('item_openbox',
+            { itemId: 2001, number: 10 }, '开启木质宝箱10个')
         })
       }
 
@@ -253,15 +238,15 @@ export function useTaskExecutor() {
       if (!isTaskCompleted(14) && finalSettings.claimBottle) {
         taskList.push({
           name: '领取盐罐奖励',
-          execute: () => executeGameCommand(tokenId, 'bottlehelper_claim', {}, '领取盐罐奖励', 8000, logFn)
+          execute: () => executeCmd('bottlehelper_claim', {}, '领取盐罐奖励')
         })
         taskList.push({
           name: '停止盐罐',
-          execute: () => executeGameCommand(tokenId, 'bottlehelper_stop', {}, '停止盐罐', 8000, logFn)
+          execute: () => executeCmd('bottlehelper_stop', {}, '停止盐罐')
         })
         taskList.push({
           name: '开始盐罐',
-          execute: () => executeGameCommand(tokenId, 'bottlehelper_start', {}, '开始盐罐', 8000, logFn)
+          execute: () => executeCmd('bottlehelper_start', {}, '开始盐罐')
         })
       }
 
@@ -272,21 +257,22 @@ export function useTaskExecutor() {
           execute: async () => {
             logFn('开始竞技场战斗流程')
 
-            if (new Date().getHours() < 8) {
+            const currentHour = new Date().getHours()
+            if (currentHour < 8) {
               logFn('当前时间未到8点，跳过竞技场战斗', 'warning')
               return
             }
 
-            if (new Date().getHours() > 22) {
+            if (currentHour > 22) {
               logFn('当前时间已过22点，跳过竞技场战斗', 'warning')
               return
             }
 
             // 智能切换到竞技场阵容
-            await switchToFormationIfNeeded(tokenId, finalSettings.arenaFormation!, '竞技场阵容', logFn)
+            await switchToFormation(finalSettings.arenaFormation!, '竞技场阵容')
 
             // 开始竞技场
-            await executeGameCommand(tokenId, 'arena_startarea', {}, '开始竞技场', 8000, logFn)
+            await executeCmd('arena_startarea', {}, '开始竞技场')
 
             // 进行3场战斗
             for (let i = 1; i <= 3; i++) {
@@ -295,8 +281,7 @@ export function useTaskExecutor() {
               // 获取目标
               let targets
               try {
-                targets = await executeGameCommand(tokenId, 'arena_getareatarget',
-                  {}, `获取竞技场目标${i}`, 8000, logFn)
+                targets = await executeCmd('arena_getareatarget', {}, `获取竞技场目标${i}`)
               } catch (err: any) {
                 logFn(`竞技场战斗${i} - 获取对手失败: ${err.message}`, 'error')
                 break
@@ -304,8 +289,7 @@ export function useTaskExecutor() {
 
               const targetId = pickArenaTargetId(targets)
               if (targetId) {
-                await executeGameCommand(tokenId, 'fight_startareaarena',
-                  { targetId }, `竞技场战斗${i}`, 10000, logFn)
+                await executeCmd('fight_startareaarena', { targetId }, `竞技场战斗${i}`, 10000)
               } else {
                 logFn(`竞技场战斗${i} - 未找到目标`, 'warning')
               }
@@ -327,13 +311,13 @@ export function useTaskExecutor() {
           // 为军团BOSS智能切换阵容
           taskList.push({
             name: '军团BOSS阵容检查',
-            execute: () => switchToFormationIfNeeded(tokenId, finalSettings.bossFormation!, 'BOSS阵容', logFn)
+            execute: () => switchToFormation(finalSettings.bossFormation!, 'BOSS阵容')
           })
 
           for (let i = 0; i < remainingLegionBoss; i++) {
             taskList.push({
               name: `军团BOSS ${i + 1}/${remainingLegionBoss}`,
-              execute: () => executeGameCommand(tokenId, 'fight_startlegionboss', {}, `军团BOSS ${i + 1}`, 12000, logFn)
+              execute: () => executeCmd('fight_startlegionboss', {}, `军团BOSS ${i + 1}`, 12000)
             })
           }
         }
@@ -344,15 +328,15 @@ export function useTaskExecutor() {
           // 如果没有军团BOSS，为每日BOSS切换阵容
           taskList.push({
             name: '每日BOSS阵容检查',
-            execute: () => switchToFormationIfNeeded(tokenId, finalSettings.bossFormation!, 'BOSS阵容', logFn)
+            execute: () => switchToFormation(finalSettings.bossFormation!, 'BOSS阵容')
           })
         }
 
         for (let i = 0; i < 3; i++) {
           taskList.push({
             name: `每日BOSS ${i + 1}/3`,
-            execute: () => executeGameCommand(tokenId, 'fight_startboss',
-              { bossId: todayBossId }, `每日BOSS ${i + 1}`, 12000, logFn)
+            execute: () => executeCmd('fight_startboss',
+              { bossId: todayBossId }, `每日BOSS ${i + 1}`, 12000)
           })
         }
       }
@@ -374,7 +358,7 @@ export function useTaskExecutor() {
       fixedRewards.forEach(reward => {
         taskList.push({
           name: reward.name,
-          execute: () => executeGameCommand(tokenId, reward.cmd, reward.params || {}, reward.name, 8000, logFn)
+          execute: () => executeCmd(reward.cmd, reward.params || {}, reward.name)
         })
       })
 
@@ -384,8 +368,8 @@ export function useTaskExecutor() {
         for (let i = 0; i < 3; i++) {
           taskList.push({
             name: `免费钓鱼 ${i + 1}/3`,
-            execute: () => executeGameCommand(tokenId, 'artifact_lottery',
-              { lotteryNumber: 1, newFree: true, type: 1 }, `免费钓鱼 ${i + 1}`, 8000, logFn)
+            execute: () => executeCmd('artifact_lottery',
+              { lotteryNumber: 1, newFree: true, type: 1 }, `免费钓鱼 ${i + 1}`)
           })
         }
       }
@@ -396,8 +380,8 @@ export function useTaskExecutor() {
         if (isTodayAvailable(statisticsTime[`genie:daily:free:${gid}`])) {
           taskList.push({
             name: `${kingdoms[gid - 1]}灯神免费扫荡`,
-            execute: () => executeGameCommand(tokenId, 'genie_sweep',
-              { genieId: gid }, `${kingdoms[gid - 1]}灯神免费扫荡`, 8000, logFn)
+            execute: () => executeCmd('genie_sweep',
+              { genieId: gid }, `${kingdoms[gid - 1]}灯神免费扫荡`)
           })
         }
       }
@@ -406,7 +390,7 @@ export function useTaskExecutor() {
       for (let i = 0; i < 3; i++) {
         taskList.push({
           name: `领取免费扫荡卷 ${i + 1}/3`,
-          execute: () => executeGameCommand(tokenId, 'genie_buysweep', {}, `领取免费扫荡卷 ${i + 1}`, 8000, logFn)
+          execute: () => executeCmd('genie_buysweep', {}, `领取免费扫荡卷 ${i + 1}`)
         })
       }
 
@@ -414,11 +398,11 @@ export function useTaskExecutor() {
       if (!isTaskCompleted(12) && finalSettings.blackMarketPurchase) {
         taskList.push({
           name: '购买青铜宝箱',
-          execute: () => executeGameCommand(tokenId, 'store_buy', { goodsId: 1 }, '购买青铜宝箱', 8000, logFn)
+          execute: () => executeCmd('store_buy', { goodsId: 1 }, '购买青铜宝箱')
         })
         taskList.push({
           name: '黑市购买1次物品',
-          execute: () => executeGameCommand(tokenId, 'store_purchase', { goodsId: 1 }, '黑市购买1次物品', 8000, logFn)
+          execute: () => executeCmd('store_purchase', { goodsId: 1 }, '黑市购买1次物品')
         })
       }
 
@@ -426,8 +410,8 @@ export function useTaskExecutor() {
       for (let taskId = 1; taskId <= 10; taskId++) {
         taskList.push({
           name: `领取任务奖励${taskId}`,
-          execute: () => executeGameCommand(tokenId, 'task_claimdailypoint',
-            { taskId }, `领取任务奖励${taskId}`, 5000, logFn)
+          execute: () => executeCmd('task_claimdailypoint',
+            { taskId }, `领取任务奖励${taskId}`, 5000)
         })
       }
 
@@ -435,11 +419,11 @@ export function useTaskExecutor() {
       taskList.push(
         {
           name: '领取日常任务奖励',
-          execute: () => executeGameCommand(tokenId, 'task_claimdailyreward', {}, '领取日常任务奖励', 8000, logFn)
+          execute: () => executeCmd('task_claimdailyreward', {}, '领取日常任务奖励')
         },
         {
           name: '领取周常任务奖励',
-          execute: () => executeGameCommand(tokenId, 'task_claimweekreward', {}, '领取周常任务奖励', 8000, logFn)
+          execute: () => executeCmd('task_claimweekreward', {}, '领取周常任务奖励')
         }
       )
 

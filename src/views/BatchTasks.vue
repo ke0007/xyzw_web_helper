@@ -428,6 +428,22 @@ const processToken = async (tokenId) => {
 
   addLog(`Token ${token.name} 连接成功`, 'success')
 
+  // 初始化游戏数据（包括 battleVersion）
+  try {
+    addLog(`初始化游戏数据 [${token.name}]...`, 'info')
+    tokenStore.sendMessage(tokenId, 'role_getroleinfo')
+    tokenStore.sendMessage(tokenId, 'tower_getinfo')
+    tokenStore.sendMessage(tokenId, 'presetteam_getinfo')
+    const res = await tokenStore.sendMessageWithPromise(tokenId, 'fight_startlevel', {}, 5000)
+    tokenStore.setBattleVersion(res?.battleData?.version)
+    addLog(`游戏数据初始化完成 (battleVersion: ${res?.battleData?.version})`, 'success')
+    // 等待一小段时间确保数据同步
+    await sleep(500)
+  } catch (error: any) {
+    addLog(`初始化游戏数据失败: ${error.message}`, 'warning')
+    // 初始化失败不阻断任务执行，但可能影响战斗类任务
+  }
+
   // 执行选中的任务
   for (const taskId of selectedTasks.value) {
     if (stopFlag.value) {
