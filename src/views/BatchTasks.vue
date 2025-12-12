@@ -438,7 +438,7 @@ const processToken = async (tokenId) => {
     tokenStore.setBattleVersion(res?.battleData?.version)
     addLog(`游戏数据初始化完成 (battleVersion: ${res?.battleData?.version})`, 'success')
     // 等待一小段时间确保数据同步
-    await sleep(500)
+    await sleep(200)
   } catch (error: any) {
     addLog(`初始化游戏数据失败: ${error.message}`, 'warning')
     // 初始化失败不阻断任务执行，但可能影响战斗类任务
