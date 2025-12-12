@@ -83,7 +83,7 @@ export function useTaskExecutor() {
       try {
         if (description) logFn(`执行: ${description}`)
         const result = await tokenStore.sendMessageWithPromise(tokenId, cmd, params, timeout)
-        await new Promise(resolve => setTimeout(resolve, 300))
+        await new Promise(resolve => setTimeout(resolve, 500))
         if (description) logFn(`${description} - 成功`, 'success')
         return result
       } catch (error: any) {
@@ -295,7 +295,7 @@ export function useTaskExecutor() {
               }
 
               // 战斗间隔
-              await new Promise(resolve => setTimeout(resolve, 500))
+              await new Promise(resolve => setTimeout(resolve, 1000))
             }
           }
         })
@@ -472,7 +472,7 @@ export function useTaskExecutor() {
     try {
       logFn('正在重启盐罐...', 'info')
       tokenStore.sendMessage(tokenId, 'bottlehelper_stop')
-      await new Promise(resolve => setTimeout(resolve, 300))
+      await new Promise(resolve => setTimeout(resolve, 500))
       tokenStore.sendMessage(tokenId, 'bottlehelper_start')
       tokenStore.sendMessage(tokenId, 'role_getroleinfo')
       logFn('重启盐罐完成', 'success')
@@ -501,10 +501,10 @@ export function useTaskExecutor() {
       logFn('正在加钟...', 'info')
       for (let i = 0; i < 4; i++) {
         tokenStore.sendMessage(tokenId, 'system_mysharecallback', { isSkipShareCard: true, type: 2 })
-        await new Promise(resolve => setTimeout(resolve, 200))
+        await new Promise(resolve => setTimeout(resolve, 300))
       }
 
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      await new Promise(resolve => setTimeout(resolve, 1500))
       tokenStore.sendMessage(tokenId, 'role_getroleinfo')
       logFn('挂机加钟完成', 'success')
       return true
