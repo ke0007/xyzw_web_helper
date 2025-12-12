@@ -90,13 +90,15 @@ const importRules = {
 const handleImport = () => {
   isImporting.value = true;
   try {
-    tokenStore.addToken({
+    const newToken = tokenStore.addToken({
       name: importForm.name,
       token: importForm.base64Token,
       server: importForm.server,
       wsUrl: importForm.wsUrl
     });
-    message.success('Token添加成功');
+    // 自动升级为长期有效
+    tokenStore.upgradeTokenToPermanent(newToken.id);
+    message.success('Token添加成功（已设置为长期有效）');
     importForm.name = '';
     importForm.base64Token = '';
     importForm.server = '';

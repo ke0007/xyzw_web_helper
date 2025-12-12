@@ -101,15 +101,17 @@ const handleUrlImport = async () => {
   try {
     const response = await axios.get(urlForm.url);
     if (response.status === 200 && response.data && response.data.token) {
-      const newToken = {
+      const tokenData = {
         name: urlForm.name,
         token: response.data.token,
         server: urlForm.server || '未知',
         wsUrl: urlForm.wsUrl || '',
         id: Date.now().toString()
       };
-      tokenStore.addToken(newToken);
-      message.success('Token添加成功');
+      const newToken = tokenStore.addToken(tokenData);
+      // 自动升级为长期有效
+      tokenStore.upgradeTokenToPermanent(newToken.id);
+      message.success('Token添加成功（已设置为长期有效）');
       // 重置表单
       urlForm.name = '';
       urlForm.url = '';

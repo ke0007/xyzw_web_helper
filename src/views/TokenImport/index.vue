@@ -45,19 +45,40 @@
 
       <!-- Token列表 -->
       <div v-if="tokenStore.hasTokens" class="tokens-section">
+        <!-- 批量删除模式提示 -->
+        <n-alert 
+          v-if="isBatchDeleteMode" 
+          type="warning" 
+          title="批量删除模式"
+          style="margin-bottom: var(--spacing-lg)"
+          closable
+          @close="exitBatchDeleteMode"
+        >
+          <template #icon>
+            <n-icon>
+              <TrashBin />
+            </n-icon>
+          </template>
+          请选择要删除的Token，已选择 {{ selectedTokensForDelete.size }} 个。点击"批量操作"进行下一步操作。
+        </n-alert>
+        
         <div class="section-header">
           <h2>我的Token列表 ({{ tokenStore.gameTokens.length }}个)</h2>
           <div class="header-actions">
-            <n-button v-if="tokenStore.selectedToken" type="success" @click="goToDashboard">
+<!--            <n-button v-if="tokenStore.selectedToken" type="success" @click="goToDashboard">
               <template #icon>
                 <n-icon>
                   <Home />
                 </n-icon>
               </template>
               返回控制台
-            </n-button>
+            </n-button>-->
 
-            <n-button v-if="!showImportForm" type="primary" @click="showImportForm = true">
+            <n-button 
+              v-if="!showImportForm && !isBatchDeleteMode" 
+              type="primary" 
+              @click="showImportForm = true"
+            >
               <template #icon>
                 <n-icon>
                   <Add />
@@ -67,38 +88,64 @@
             </n-button>
 
             <n-dropdown :options="bulkOptions" @select="handleBulkAction">
-              <n-button>
+              <n-button :type="isBatchDeleteMode ? 'error' : 'default'">
                 <template #icon>
                   <n-icon>
-                    <Menu />
+                    <component :is="isBatchDeleteMode ? TrashBin : Menu" />
                   </n-icon>
                 </template>
-                批量操作
+                {{ isBatchDeleteMode ? '批量删除' : '批量操作' }}
               </n-button>
             </n-dropdown>
           </div>
         </div>
 
         <div class="tokens-grid">
-          <a-card v-for="token in tokenStore.gameTokens" :key="token.id" :class="{
-            'token-card': true,
-            active: selectedTokenId === token.id
-          }" @click="selectToken(token)">
+          <a-card 
+            v-for="token in tokenStore.gameTokens" 
+            :key="token.id" 
+            :class="{
+              'token-card': true,
+              active: selectedTokenId === token.id,
+              'batch-mode': isBatchDeleteMode,
+              'selected-for-delete': isBatchDeleteMode && selectedTokensForDelete.has(token.id)
+            }"
+            @click="isBatchDeleteMode ? toggleTokenSelection(token.id, !selectedTokensForDelete.has(token.id)) : null"
+          >
             <template #title>
-              <a-space class="token-name">
-                {{ token.name }}
-                <a-tag color="red" v-if="token.server">{{ token.server }}</a-tag>
-                <!-- 连接状态指示器 -->
-                <a-badge :status="getTokenStyle(token.id)" :text="getConnectionStatusText(token.id)" />
-                <!-- 连接状态文字 -->
-                <!-- <a-tag color="green">
-                  {{ getConnectionStatusText(token.id) }}
-                </a-tag> -->
-              </a-space>
+              <div class="card-title-wrapper">
+                <!-- 只在批量删除模式下显示复选框 -->
+                <n-checkbox 
+                  v-if="isBatchDeleteMode"
+                  :checked="selectedTokensForDelete.has(token.id)"
+                  @update:checked="(checked) => toggleTokenSelection(token.id, checked)"
+                  @click.stop
+                  class="token-checkbox"
+                />
+                <a-space class="token-name" @click="isBatchDeleteMode ? null : selectToken(token)">
+                  {{ token.name }}
+                  <a-tag color="red" v-if="token.server">{{ token.server }}</a-tag>
+                  <!-- 连接状态指示器 -->
+                  <a-badge :status="getTokenStyle(token.id)" :text="getConnectionStatusText(token.id)" />
+                </a-space>
+                <n-button 
+                  v-if="!isBatchDeleteMode"
+                  text 
+                  size="small" 
+                  @click.stop="toggleTokenExpand(token.id)"
+                  class="expand-button"
+                >
+                  <template #icon>
+                    <n-icon>
+                      <component :is="expandedTokens.has(token.id) ? ChevronUp : ChevronDown" />
+                    </n-icon>
+                  </template>
+                </n-button>
+              </div>
             </template>
             <template #extra>
               <n-dropdown :options="getTokenActions(token)" @select="(key) => handleTokenAction(key, token)">
-                <n-button text>
+                <n-button text @click.stop>
                   <template #icon>
                     <n-icon>
                       <EllipsisHorizontal />
@@ -109,55 +156,52 @@
             </template>
 
             <template #default>
-              <div class="token-display">
-                <span class="token-label">Token:</span>
-                <code class="token-value">{{ maskToken(token.token) }}</code>
-              </div>
-              <a-button :loading="refreshingTokens.has(token.id)" @click.stop="refreshToken(token)">
-                <template #icon>
-                  <n-icon>
-                    <Refresh />
-                  </n-icon>
-                </template>
-                {{ token.sourceUrl ? '刷新' : '重新获取' }}
-              </a-button>
-
-              <div class="token-timestamps">
-                <div class="timestamp-item">
-                  <span class="timestamp-label">创建：</span>
-                  <span class="timestamp-value">{{ formatTime(token.createdAt) }}</span>
+              <!-- 详细信息（可展开/折叠，批量删除模式下不显示） -->
+              <div v-show="!isBatchDeleteMode && expandedTokens.has(token.id)" class="token-details">
+                <div class="token-display">
+                  <span class="token-label">Token:</span>
+                  <code class="token-value">{{ maskToken(token.token) }}</code>
                 </div>
-                <div class="timestamp-item">
-                  <span class="timestamp-label">使用：</span>
-                  <span class="timestamp-value">{{ formatTime(token.lastUsed) }}</span>
-                </div>
-              </div>
+                <a-button :loading="refreshingTokens.has(token.id)" @click.stop="refreshToken(token)">
+                  <template #icon>
+                    <n-icon>
+                      <Refresh />
+                    </n-icon>
+                  </template>
+                  {{ token.sourceUrl ? '刷新' : '重新获取' }}
+                </a-button>
 
-              <!-- 存储类型信息 -->
-              <div class="storage-info">
-                <div class="storage-item">
-                  <span class="storage-label">存储类型：</span>
-                  <n-tag size="small" :type="token.importMethod === 'url' ? 'success' : 'warning'">
-                    {{ token.importMethod === 'url' ? '长期有效' : '临时存储' }}
-                  </n-tag>
+                <div class="token-timestamps">
+                  <div class="timestamp-item">
+                    <span class="timestamp-label">创建：</span>
+                    <span class="timestamp-value">{{ formatTime(token.createdAt) }}</span>
+                  </div>
+                  <div class="timestamp-item">
+                    <span class="timestamp-label">使用：</span>
+                    <span class="timestamp-value">{{ formatTime(token.lastUsed) }}</span>
+                  </div>
                 </div>
 
-                <!-- 升级选项（仅对临时存储的token显示） -->
-                <div v-if="token.importMethod !== 'url'" class="storage-upgrade">
-                  <n-button size="tiny" type="success" ghost @click.stop="upgradeTokenToPermanent(token)">
-                    <template #icon>
-                      <n-icon>
-                        <Star />
-                      </n-icon>
-                    </template>
-                    升级为长期有效
-                  </n-button>
+                <!-- 存储类型信息 -->
+                <div class="storage-info">
+                  <div class="storage-item">
+                    <span class="storage-label">存储类型：</span>
+                    <n-tag size="small" type="success">
+                      长期有效
+                    </n-tag>
+                  </div>
                 </div>
               </div>
             </template>
             <template #actions>
-              <n-button type="primary" size="large" block :loading="connectingTokens.has(token.id)"
-                @click="startTaskManagement(token)">
+              <n-button 
+                v-if="!isBatchDeleteMode"
+                type="primary" 
+                size="large" 
+                block 
+                :loading="connectingTokens.has(token.id)"
+                @click.stop="startTaskManagement(token)"
+              >
                 <template #icon>
                   <n-icon>
                     <Home />
@@ -165,6 +209,10 @@
                 </template>
                 开始任务管理
               </n-button>
+              <!-- 批量删除模式下显示提示 -->
+              <div v-else class="batch-delete-hint">
+                点击卡片可{{ selectedTokensForDelete.has(token.id) ? '取消' : '' }}选择此Token
+              </div>
             </template>
           </a-card>
         </div>
@@ -220,6 +268,8 @@ import BinTokenForm from './bin.vue'
 import { useTokenStore, selectedTokenId } from '@/stores/tokenStore'
 import {
   Add,
+  ChevronDown,
+  ChevronUp,
   Copy,
   Create,
   EllipsisHorizontal,
@@ -261,6 +311,9 @@ const editingToken = ref(null)
 const importMethod = ref('manual')
 const refreshingTokens = ref(new Set())
 const connectingTokens = ref(new Set())
+const selectedTokensForDelete = ref(new Set()) // 批量删除选中的token
+const expandedTokens = ref(new Set()) // 展开的token详情
+const isBatchDeleteMode = ref(false) // 是否处于批量删除模式
 
 // 编辑表单
 const editForm = reactive({
@@ -280,13 +333,53 @@ const editRules = {
 }
 
 
-const bulkOptions = [
-  { label: '导出所有Token', key: 'export' },
-  { label: '导入Token文件', key: 'import' },
-  { label: '清理过期Token', key: 'clean' },
-  { label: '断开所有连接', key: 'disconnect' },
-  { label: '清除所有Token', key: 'clear' }
-]
+const bulkOptions = computed(() => {
+  // 批量删除模式下的选项
+  if (isBatchDeleteMode.value) {
+    return [
+      { 
+        label: selectedTokensForDelete.value.size > 0 && selectedTokensForDelete.value.size === tokenStore.gameTokens.length
+          ? '取消全选'
+          : '全选',
+        key: 'toggle-select-all'
+      },
+      { 
+        label: `确认删除 (${selectedTokensForDelete.value.size})`, 
+        key: 'confirm-delete',
+        disabled: selectedTokensForDelete.value.size === 0
+      },
+      { label: '取消', key: 'cancel-batch-delete' }
+    ]
+  }
+  
+  // 正常模式下的选项
+  return [
+    { label: '导出所有Token', key: 'export' },
+    { label: '导入Token文件', key: 'import' },
+    { label: '清理过期Token', key: 'clean' },
+    { label: '断开所有连接', key: 'disconnect' },
+    { label: '批量删除Token', key: 'batch-delete' },
+    { label: '清除所有Token', key: 'clear' }
+  ]
+})
+
+// 切换token选中状态
+const toggleTokenSelection = (tokenId, checked) => {
+  if (checked) {
+    selectedTokensForDelete.value.add(tokenId)
+  } else {
+    selectedTokensForDelete.value.delete(tokenId)
+  }
+}
+
+// 切换token展开状态
+const toggleTokenExpand = (tokenId) => {
+  if (expandedTokens.value.has(tokenId)) {
+    expandedTokens.value.delete(tokenId)
+  } else {
+    expandedTokens.value.add(tokenId)
+  }
+}
 
 /**
  * 手动打开Token管理卡片
@@ -608,9 +701,81 @@ const handleBulkAction = (key) => {
     case 'disconnect':
       disconnectAll()
       break
+    case 'batch-delete':
+      enterBatchDeleteMode()
+      break
+    case 'toggle-select-all':
+      toggleSelectAll()
+      break
+    case 'confirm-delete':
+      confirmBatchDelete()
+      break
+    case 'cancel-batch-delete':
+      exitBatchDeleteMode()
+      break
     case 'clear':
       clearAllTokens()
       break
+  }
+}
+
+// 进入批量删除模式
+const enterBatchDeleteMode = () => {
+  isBatchDeleteMode.value = true
+  selectedTokensForDelete.value.clear()
+  message.info('请选择要删除的Token')
+}
+
+// 退出批量删除模式
+const exitBatchDeleteMode = () => {
+  isBatchDeleteMode.value = false
+  selectedTokensForDelete.value.clear()
+  message.info('已取消批量删除')
+}
+
+// 确认批量删除
+const confirmBatchDelete = () => {
+  batchDeleteTokens()
+}
+
+// 批量删除Token
+const batchDeleteTokens = () => {
+  const count = selectedTokensForDelete.value.size
+  if (count === 0) {
+    message.warning('请先选择要删除的Token')
+    return
+  }
+
+  dialog.warning({
+    title: '批量删除Token',
+    content: `确定要删除选中的 ${count} 个Token吗？此操作无法恢复。`,
+    positiveText: '确定删除',
+    negativeText: '取消',
+    onPositiveClick: () => {
+      const tokenIds = Array.from(selectedTokensForDelete.value)
+      tokenIds.forEach(tokenId => {
+        tokenStore.removeToken(tokenId)
+      })
+      selectedTokensForDelete.value.clear()
+      isBatchDeleteMode.value = false // 删除后退出批量删除模式
+      message.success(`已删除 ${count} 个Token`)
+    }
+  })
+}
+
+// 全选/取消全选
+const toggleSelectAll = () => {
+  if (selectedTokensForDelete.value.size === tokenStore.gameTokens.length) {
+    // 当前全选，则取消全选
+    selectedTokensForDelete.value.clear()
+    message.info('已取消全选')
+  } else {
+    // 全选所有token
+    selectedTokensForDelete.value.clear()
+    tokenStore.gameTokens.forEach(token => {
+      selectedTokensForDelete.value.add(token.id)
+    })
+    message.success(`已全选 ${tokenStore.gameTokens.length} 个Token`)
   }
 }
 
@@ -1383,5 +1548,86 @@ onMounted(async () => {
 
 .storage-upgrade {
   margin-top: var(--spacing-xs);
+}
+
+/* 卡片标题包装器 */
+.card-title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+}
+
+.token-checkbox {
+  flex-shrink: 0;
+}
+
+.token-name {
+  flex: 1;
+  cursor: pointer;
+}
+
+.expand-button {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* Token详细信息容器 */
+.token-details {
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 批量删除模式样式 */
+.token-card.batch-mode {
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  
+  &:hover {
+    border-color: var(--error-color);
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+  }
+}
+
+.token-card.selected-for-delete {
+  border-color: var(--error-color);
+  background: rgba(239, 68, 68, 0.05);
+  
+  &:hover {
+    background: rgba(239, 68, 68, 0.1);
+  }
+}
+
+/* 批量删除模式下，Token名称不可点击 */
+.batch-mode .token-name {
+  cursor: default;
+  pointer-events: none;
+}
+
+/* 批量删除提示 */
+.batch-delete-hint {
+  text-align: center;
+  padding: var(--spacing-md);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  background: var(--bg-tertiary);
+  border-radius: var(--border-radius-medium);
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .card-title-wrapper {
+    gap: var(--spacing-xs);
+  }
 }
 </style>

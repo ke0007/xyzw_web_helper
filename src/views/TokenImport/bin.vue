@@ -163,14 +163,18 @@ const handleImport = async () => {
       tokenStore.updateToken(gameToken.id, {
         ...role
       });
+      // 确保升级为长期有效
+      tokenStore.upgradeTokenToPermanent(gameToken.id);
     } else {
-      tokenStore.addToken({
+      const newToken = tokenStore.addToken({
         ...role
       });
+      // 自动升级为长期有效
+      tokenStore.upgradeTokenToPermanent(newToken.id);
     }
   });
   console.log('当前Token列表:', tokenStore.gameTokens);
-  message.success('Token添加成功');
+  message.success('Token添加成功（已设置为长期有效）');
   roleList.value = [];
   $emit('ok');
 };
