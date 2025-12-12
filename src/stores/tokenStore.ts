@@ -33,6 +33,7 @@ declare interface WebSocketConnection {
   randomSeedSynced?: boolean;
   lastRandomSeedSource?: number | null;
   lastRandomSeed?: number | null;
+  battleVersion?: number | null; // 每个连接独立的 battleVersion
 }
 
 declare type WebCtx = Record<string, Partial<WebSocketConnection>>;
@@ -612,7 +613,7 @@ export const useTokenStore = defineStore('tokens', () => {
   }
 
   // WebSocket连接管理（重构版 - 防重连）
-  const createWebSocketConnection = async (tokenId: string, base64Token: string, customWsUrl = null) => {
+  const createWebSocketConnection = async (tokenId: string, base64Token: string, customWsUrl: string | null = null) => {
     wsLogger.info(`开始创建连接: ${tokenId}`)
 
     // 1. 获取连接锁，防止竞态条件
@@ -876,9 +877,10 @@ export const useTokenStore = defineStore('tokens', () => {
     // 为战斗相关命令自动注入 battleVersion
     const battleCommands = ['fight_startareaarena', 'fight_startpvp', 'fight_starttower', 'fight_startboss', 'fight_startlegionboss', 'fight_startdungeon']
     if (battleCommands.includes(cmd)) {
-      const battleVersion = gameData.value.battleVersion
+      // 优先使用连接中的 battleVersion，其次使用全局 battleVersion
+      const battleVersion = connection.battleVersion ?? gameData.value.battleVersion
       params = { battleVersion, ...params }
-      wsLogger.info(`⚔️ [战斗命令] 注入 battleVersion: ${battleVersion} [${cmd}]`)
+      wsLogger.info(`⚔️ [战斗命令] 注入 battleVersion: ${battleVersion} [${cmd}] [${tokenId}]`)
     }
 
     try {
@@ -1250,6 +1252,35 @@ export const useTokenStore = defineStore('tokens', () => {
     return gameData.value.battleVersion
   }
 
+  // 设置特定连接的 battleVersion
+  const setBattleVersionForConnection = (tokenId: string, version: number | null) => {
+    const connection = wsConnections.value[tokenId]
+    if (connection) {
+      connection.battleVersion = version
+      wsLogger.info(`设置连接 battleVersion: ${version} [${tokenId}]`)
+    }
+  }
+
+  // 获取特定连接的 battleVersion
+  const getBattleVersionForConnection = (tokenId: string) => {
+    const connection = wsConnections.value[tokenId]
+    return connection?.battleVersion ?? null
+  }
+
+  // 批量任务专用：连接Token但不断开其他连接
+  const connectTokenForBatch = async (tokenId: string, token: string, wsUrl: string | null = null) => {
+    wsLogger.info(`批量任务连接: ${tokenId}`)
+    
+    // 直接创建连接，不调用 selectToken（selectToken 会断开其他连接）
+    return await createWebSocketConnection(tokenId, token, wsUrl)
+  }
+
+  // 批量任务专用：断开Token连接
+  const disconnectTokenForBatch = async (tokenId: string) => {
+    wsLogger.info(`批量任务断开: ${tokenId}`)
+    await closeWebSocketConnectionAsync(tokenId)
+  }
+
   return {
     // 状态
     gameTokens,
@@ -1304,6 +1335,12 @@ export const useTokenStore = defineStore('tokens', () => {
     // battleVersion
     setBattleVersion,
     getBattleVersion,
+    setBattleVersionForConnection,
+    getBattleVersionForConnection,
+
+    // 批量任务专用方法
+    connectTokenForBatch,
+    disconnectTokenForBatch,
 
     // 调试工具方法
     validateToken,

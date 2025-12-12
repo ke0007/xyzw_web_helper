@@ -94,8 +94,50 @@
           <h2>执行控制</h2>
         </div>
         <div class="card-content">
+          <div class="mode-description">
+            <n-alert 
+              v-if="executionMode === 'serial'" 
+              type="info" 
+              title="串行模式"
+              style="margin-bottom: var(--spacing-md)"
+            >
+              按顺序逐个处理Token，每次只连接一个Token，适合稳定执行。
+            </n-alert>
+            <n-alert 
+              v-if="executionMode === 'parallel'" 
+              type="warning" 
+              title="并行模式"
+              style="margin-bottom: var(--spacing-md)"
+            >
+              同时处理多个Token，提高执行速度。每批最多同时连接 {{ parallelCount }} 个Token。
+            </n-alert>
+          </div>
           <div class="control-options">
-            <n-form-item label="Token间隔时间（秒）">
+            <n-form-item label="执行模式">
+              <n-radio-group v-model:value="executionMode" size="small">
+                <n-radio value="serial">串行</n-radio>
+                <n-radio value="parallel">并行</n-radio>
+              </n-radio-group>
+            </n-form-item>
+            
+            <n-form-item 
+              v-if="executionMode === 'parallel'" 
+              label="并行数量"
+            >
+              <n-input-number
+                v-model:value="parallelCount"
+                :min="1"
+                :max="10"
+                :step="1"
+                size="small"
+                style="width: 120px"
+              />
+            </n-form-item>
+            
+            <n-form-item 
+              v-if="executionMode === 'serial'" 
+              label="Token间隔时间（秒）"
+            >
               <n-input-number
                 v-model:value="tokenInterval"
                 :min="1"
@@ -105,6 +147,7 @@
                 style="width: 120px"
               />
             </n-form-item>
+            
             <n-form-item label="任务间隔时间（秒）">
               <n-input-number
                 v-model:value="taskInterval"
@@ -189,6 +232,8 @@ const taskExecutor = useTaskExecutor()
 // 响应式数据
 const selectedTokenIds = ref([])
 const selectedTasks = ref([])
+const executionMode = ref('serial') // 执行模式：串行(serial) 或 并行(parallel)
+const parallelCount = ref(5) // 并行执行数量
 const tokenInterval = ref(1) // Token间隔时间（秒）
 const taskInterval = ref(1) // 任务间隔时间（秒）
 const isRunning = ref(false)
@@ -405,8 +450,8 @@ const executeTask = async (tokenId, task) => {
   }
 }
 
-// 处理单个Token的所有任务
-const processToken = async (tokenId) => {
+// 处理单个Token的所有任务（支持串行和并行模式）
+const processToken = async (tokenId, useBatchMode = false) => {
   const token = tokenStore.gameTokens.find(t => t.id === tokenId)
   if (!token) {
     addLog(`Token ${tokenId} 不存在`, 'error')
@@ -415,49 +460,127 @@ const processToken = async (tokenId) => {
 
   addLog(`开始处理Token: ${token.name}`, 'info')
 
-  // 选择并连接Token
-  tokenStore.selectToken(tokenId, true)
-  addLog(`正在连接Token: ${token.name}...`, 'info')
-
-  // 等待连接建立
-  const connected = await waitForConnection(tokenId)
-  if (!connected) {
-    addLog(`Token ${token.name} 连接超时，跳过`, 'error')
-    return
-  }
-
-  addLog(`Token ${token.name} 连接成功`, 'success')
-
-  // 初始化游戏数据（包括 battleVersion）
   try {
-    addLog(`初始化游戏数据 [${token.name}]...`, 'info')
-    tokenStore.sendMessage(tokenId, 'role_getroleinfo')
-    tokenStore.sendMessage(tokenId, 'tower_getinfo')
-    tokenStore.sendMessage(tokenId, 'presetteam_getinfo')
-    const res = await tokenStore.sendMessageWithPromise(tokenId, 'fight_startlevel', {}, 5000)
-    tokenStore.setBattleVersion(res?.battleData?.version)
-    addLog(`游戏数据初始化完成 (battleVersion: ${res?.battleData?.version})`, 'success')
-    // 等待一小段时间确保数据同步
-    await sleep(200)
-  } catch (error: any) {
-    addLog(`初始化游戏数据失败: ${error.message}`, 'warning')
-    // 初始化失败不阻断任务执行，但可能影响战斗类任务
-  }
+    // 根据模式选择连接方式
+    if (useBatchMode) {
+      // 并行模式：使用批量连接，不断开其他连接
+      addLog(`[并行模式] 正在连接Token: ${token.name}...`, 'info')
+      await tokenStore.connectTokenForBatch(tokenId, token.token, token.wsUrl)
+    } else {
+      // 串行模式：使用常规连接
+      addLog(`[串行模式] 正在连接Token: ${token.name}...`, 'info')
+      tokenStore.selectToken(tokenId, true)
+    }
 
-  // 执行选中的任务
-  for (const taskId of selectedTasks.value) {
-    if (stopFlag.value) {
-      addLog(`已停止执行`, 'warning')
+    // 等待连接建立
+    const connected = await waitForConnection(tokenId)
+    if (!connected) {
+      addLog(`Token ${token.name} 连接超时，跳过`, 'error')
+      if (useBatchMode) {
+        await tokenStore.disconnectTokenForBatch(tokenId)
+      }
       return
     }
 
-    const task = availableTasks.find(t => t.id === taskId)
-    if (task) {
-      await executeTask(tokenId, task)
+    addLog(`Token ${token.name} 连接成功`, 'success')
+
+    // 初始化游戏数据（包括 battleVersion）
+    try {
+      addLog(`初始化游戏数据 [${token.name}]...`, 'info')
+      tokenStore.sendMessage(tokenId, 'role_getroleinfo')
+      tokenStore.sendMessage(tokenId, 'tower_getinfo')
+      tokenStore.sendMessage(tokenId, 'presetteam_getinfo')
+      const res = await tokenStore.sendMessageWithPromise(tokenId, 'fight_startlevel', {}, 5000)
+      
+      // 为该连接设置独立的 battleVersion
+      if (useBatchMode) {
+        tokenStore.setBattleVersionForConnection(tokenId, res?.battleData?.version)
+        addLog(`游戏数据初始化完成 (battleVersion: ${res?.battleData?.version}) [连接独立]`, 'success')
+      } else {
+        tokenStore.setBattleVersion(res?.battleData?.version)
+        addLog(`游戏数据初始化完成 (battleVersion: ${res?.battleData?.version})`, 'success')
+      }
+      
+      // 等待一小段时间确保数据同步
+      await sleep(200)
+    } catch (error: any) {
+      addLog(`初始化游戏数据失败: ${error.message}`, 'warning')
+      // 初始化失败不阻断任务执行，但可能影响战斗类任务
+    }
+
+    // 执行选中的任务
+    for (const taskId of selectedTasks.value) {
+      if (stopFlag.value) {
+        addLog(`已停止执行`, 'warning')
+        break
+      }
+
+      const task = availableTasks.find(t => t.id === taskId)
+      if (task) {
+        await executeTask(tokenId, task)
+      }
+    }
+
+    addLog(`Token ${token.name} 处理完成`, 'success')
+  } catch (error: any) {
+    addLog(`Token ${token.name} 处理失败: ${error.message}`, 'error')
+  } finally {
+    // 并行模式下，任务完成后断开连接
+    if (useBatchMode) {
+      addLog(`[并行模式] 断开Token: ${token.name}`, 'info')
+      await tokenStore.disconnectTokenForBatch(tokenId)
     }
   }
+}
 
-  addLog(`Token ${token.name} 处理完成`, 'success')
+// 串行执行
+const executeSerial = async () => {
+  addLog(`[串行模式] 开始执行`, 'info')
+  
+  for (let i = 0; i < selectedTokenIds.value.length; i++) {
+    if (stopFlag.value) {
+      break
+    }
+
+    const tokenId = selectedTokenIds.value[i]
+    await processToken(tokenId, false) // false 表示串行模式
+
+    // Token间隔（最后一个Token不需要等待）
+    if (i < selectedTokenIds.value.length - 1 && tokenInterval.value > 0) {
+      addLog(`等待 ${tokenInterval.value} 秒后处理下一个Token...`, 'info')
+      await sleep(tokenInterval.value * 1000)
+    }
+  }
+}
+
+// 并行执行（分批并行）
+const executeParallel = async () => {
+  addLog(`[并行模式] 开始执行，并行数量: ${parallelCount.value}`, 'info')
+  
+  const tokenIds = [...selectedTokenIds.value]
+  const batchSize = parallelCount.value
+  
+  // 分批执行
+  for (let i = 0; i < tokenIds.length; i += batchSize) {
+    if (stopFlag.value) {
+      break
+    }
+    
+    const batch = tokenIds.slice(i, i + batchSize)
+    addLog(`[并行批次 ${Math.floor(i / batchSize) + 1}] 处理 ${batch.length} 个Token`, 'info')
+    
+    // 并行处理当前批次
+    const promises = batch.map(tokenId => processToken(tokenId, true)) // true 表示并行模式
+    await Promise.all(promises)
+    
+    addLog(`[并行批次 ${Math.floor(i / batchSize) + 1}] 完成`, 'success')
+    
+    // 批次间隔（如果不是最后一批）
+    if (i + batchSize < tokenIds.length && tokenInterval.value > 0) {
+      addLog(`等待 ${tokenInterval.value} 秒后处理下一批...`, 'info')
+      await sleep(tokenInterval.value * 1000)
+    }
+  }
 }
 
 // 开始批量执行
@@ -469,34 +592,37 @@ const startBatchTasks = async () => {
 
   isRunning.value = true
   stopFlag.value = false
+  addLog('========================================', 'info')
   addLog('开始批量执行任务...', 'info')
+  addLog(`执行模式: ${executionMode.value === 'serial' ? '串行' : '并行'}`, 'info')
   addLog(`已选择 ${selectedTokenIds.value.length} 个Token，${selectedTasks.value.length} 个任务`, 'info')
+  if (executionMode.value === 'parallel') {
+    addLog(`并行数量: ${parallelCount.value}`, 'info')
+  }
+  addLog('========================================', 'info')
 
   try {
-    for (let i = 0; i < selectedTokenIds.value.length; i++) {
-      if (stopFlag.value) {
-        break
-      }
-
-      const tokenId = selectedTokenIds.value[i]
-      await processToken(tokenId)
-
-      // Token间隔（最后一个Token不需要等待）
-      if (i < selectedTokenIds.value.length - 1 && tokenInterval.value > 0) {
-        addLog(`等待 ${tokenInterval.value} 秒后处理下一个Token...`, 'info')
-        await sleep(tokenInterval.value * 1000)
-      }
+    if (executionMode.value === 'serial') {
+      await executeSerial()
+    } else {
+      await executeParallel()
     }
 
     if (stopFlag.value) {
+      addLog('========================================', 'warning')
       addLog('批量执行已停止', 'warning')
+      addLog('========================================', 'warning')
       message.warning('批量执行已停止')
     } else {
+      addLog('========================================', 'success')
       addLog('批量执行完成', 'success')
+      addLog('========================================', 'success')
       message.success('批量执行完成')
     }
   } catch (error) {
+    addLog('========================================', 'error')
     addLog(`批量执行出错: ${error.message}`, 'error')
+    addLog('========================================', 'error')
     message.error('批量执行出错: ' + error.message)
   } finally {
     isRunning.value = false
