@@ -501,10 +501,10 @@ export function useTaskExecutor() {
       logFn('正在加钟...', 'info')
       for (let i = 0; i < 4; i++) {
         tokenStore.sendMessage(tokenId, 'system_mysharecallback', { isSkipShareCard: true, type: 2 })
-        await new Promise(resolve => setTimeout(resolve, 300))
+        await new Promise(resolve => setTimeout(resolve, 500))
       }
 
-      await new Promise(resolve => setTimeout(resolve, 1500))
+      await new Promise(resolve => setTimeout(resolve, 2000))
       tokenStore.sendMessage(tokenId, 'role_getroleinfo')
       logFn('挂机加钟完成', 'success')
       return true
