@@ -209,7 +209,7 @@ const logContainer = ref(null)
 const settings = reactive({
   arenaFormation: 1,
   bossFormation: 1,
-  bossTimes: 4,
+  bossTimes: 2,
   claimBottle: true,
   payRecruit: true,
   openBox: true,
@@ -615,9 +615,11 @@ const executeDailyTasks = async (roleInfoResp, logFn, progressFn) => {
   if (settings.bossTimes > 0) {
     // 军团BOSS
     const alreadyLegionBoss = statistics['legion:boss'] ?? 0
-    const remainingLegionBoss = Math.max(settings.bossTimes - alreadyLegionBoss, 0)
+    // const remainingLegionBoss = Math.max(settings.bossTimes - alreadyLegionBoss, 0)
+    const remainingLegionBoss = Math.max(settings.bossTimes, 0)
+    const legionBossTime =  statisticsTime['legion:boss']
 
-    if (remainingLegionBoss > 0) {
+    if (remainingLegionBoss > 0 && isTodayAvailable(legionBossTime)) {
       // 为军团BOSS智能切换阵容
       taskList.push({
         name: '军团BOSS阵容检查',

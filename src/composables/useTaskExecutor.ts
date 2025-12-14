@@ -67,7 +67,7 @@ export function useTaskExecutor() {
     const defaultSettings = {
       arenaFormation: 1,
       bossFormation: 1,
-      bossTimes: 4,
+      bossTimes: 2,
       claimBottle: true,
       payRecruit: true,
       openBox: true,
@@ -304,10 +304,12 @@ export function useTaskExecutor() {
       // === 3. BOSS战斗 ===
       if (finalSettings.bossTimes! > 0) {
         // 军团BOSS
-        const alreadyLegionBoss = statistics['legion:boss'] ?? 0
-        const remainingLegionBoss = Math.max(finalSettings.bossTimes! - alreadyLegionBoss, 0)
+        // const alreadyLegionBoss = statistics['legion:boss'] ?? 0
+        // const remainingLegionBoss = Math.max(settings.bossTimes - alreadyLegionBoss, 0)
+        const remainingLegionBoss = Math.max(finalSettings.bossTimes, 0)
+        const legionBossTime =  statisticsTime['legion:boss']
 
-        if (remainingLegionBoss > 0) {
+        if (remainingLegionBoss > 0 && isTodayAvailable(legionBossTime)) {
           // 为军团BOSS智能切换阵容
           taskList.push({
             name: '军团BOSS阵容检查',
@@ -501,10 +503,10 @@ export function useTaskExecutor() {
       logFn('正在加钟...', 'info')
       for (let i = 0; i < 4; i++) {
         tokenStore.sendMessage(tokenId, 'system_mysharecallback', { isSkipShareCard: true, type: 2 })
-        await new Promise(resolve => setTimeout(resolve, 500))
+        await new Promise(resolve => setTimeout(resolve, i * 300))
       }
 
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      await new Promise(resolve => setTimeout(resolve, 1500))
       tokenStore.sendMessage(tokenId, 'role_getroleinfo')
       logFn('挂机加钟完成', 'success')
       return true

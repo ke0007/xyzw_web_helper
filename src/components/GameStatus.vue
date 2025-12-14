@@ -10,9 +10,9 @@
       <n-tab-pane name="activity" tab="活动" />
       <n-tab-pane v-if="ENABLE_TOOLS_TAB" name="tools" tab="工具" />
 	  <n-tab-pane name="warrank" tab="盐场" />
-	  <n-tab-pane name="toprank" tab="巅峰榜" />
-	  <n-tab-pane name="topclubrank" tab="俱乐部榜" />
-	  <n-tab-pane name="goldclubrank" tab="黄金积分榜" />
+<!--	  <n-tab-pane name="toprank" tab="巅峰榜" />-->
+<!--	  <n-tab-pane name="topclubrank" tab="俱乐部榜" />-->
+<!--	  <n-tab-pane name="goldclubrank" tab="黄金积分榜" />-->
     </n-tabs>
 
 
@@ -109,13 +109,13 @@
 	<ClubWarrank v-if="activeSection === 'warrank'" />
 
 	<!-- 巅峰榜（提取组件） -->
-    <TopRankList v-if="activeSection === 'toprank'" />
+    <TopRankList v-if="activeSection === 'tools'" />
 
     <!-- 百服俱乐部（提取组件） -->
-    <TopClubList v-if="activeSection === 'topclubrank'" />
+    <TopClubList v-if="activeSection === 'tools'" />
 
     <!-- 黄金积分（提取组件） -->
-    <GoldClubList v-if="activeSection === 'goldclubrank'" />
+<!--    <GoldClubList v-if="activeSection === 'tools'" />-->
   </div>
 </template>
 
