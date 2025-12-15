@@ -95,8 +95,11 @@ export function useTaskExecutor() {
     // 智能阵容切换辅助函数（与 DailyTaskStatus.vue 保持一致）
     const switchToFormation = async (targetFormation: number, formationName: string) => {
       try {
+        // 使用 token 独立的游戏数据
+        const tokenGameData = tokenStore.getTokenGameData(tokenId)
+        
         // 首先尝试从本地缓存获取当前阵容信息
-        const cachedTeamInfo = tokenStore.gameData?.presetTeam?.presetTeamInfo
+        const cachedTeamInfo = tokenGameData?.presetTeam?.presetTeamInfo
         let currentFormation = cachedTeamInfo?.useTeamId
 
         if (currentFormation) {
@@ -525,8 +528,11 @@ export function useTaskExecutor() {
     logFn: (msg: string, type?: string) => void
   ) => {
     try {
+      // 使用 token 独立的游戏数据
+      const tokenGameData = tokenStore.getTokenGameData(tokenId)
+      
       // 检查是否已完成
-      const studyStatus = tokenStore.gameData?.studyStatus
+      const studyStatus = tokenGameData?.studyStatus
       if (studyStatus?.thisWeek) {
         logFn('本周答题已完成，跳过', 'warning')
         return true
@@ -539,8 +545,8 @@ export function useTaskExecutor() {
 
       // 启动答题
       logFn('启动答题游戏...', 'info')
-      tokenStore.gameData.studyStatus = {
-        ...tokenStore.gameData.studyStatus,
+      tokenGameData.studyStatus = {
+        ...tokenGameData.studyStatus,
         isAnswering: true,
         questionCount: 0,
         answeredCount: 0,
@@ -555,7 +561,7 @@ export function useTaskExecutor() {
       let waitCount = 0
       const maxWait = 45 // 45秒
       while (waitCount < maxWait) {
-        const currentStatus = tokenStore.gameData?.studyStatus
+        const currentStatus = tokenGameData?.studyStatus
         if (currentStatus?.status === 'completed' || !currentStatus?.isAnswering) {
           logFn('答题完成', 'success')
           return true

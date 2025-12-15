@@ -492,14 +492,14 @@ const processToken = async (tokenId, useBatchMode = false) => {
       tokenStore.sendMessage(tokenId, 'presetteam_getinfo')
       const res = await tokenStore.sendMessageWithPromise(tokenId, 'fight_startlevel', {}, 5000)
       
-      // 为该连接设置独立的 battleVersion
-      if (useBatchMode) {
-        tokenStore.setBattleVersionForConnection(tokenId, res?.battleData?.version)
-        addLog(`游戏数据初始化完成 (battleVersion: ${res?.battleData?.version}) [连接独立]`, 'success')
-      } else {
-        tokenStore.setBattleVersion(res?.battleData?.version)
-        addLog(`游戏数据初始化完成 (battleVersion: ${res?.battleData?.version})`, 'success')
-      }
+      // 为该连接设置独立的 battleVersion（无论串行还是并行都使用连接独立的版本）
+      tokenStore.setBattleVersionForConnection(tokenId, res?.battleData?.version)
+      
+      // 同时更新 token 独立的游戏数据
+      const tokenGameData = tokenStore.getTokenGameData(tokenId)
+      tokenGameData.battleVersion = res?.battleData?.version
+      
+      addLog(`游戏数据初始化完成 (battleVersion: ${res?.battleData?.version})`, 'success')
       
       // 等待一小段时间确保数据同步
       await sleep(200)

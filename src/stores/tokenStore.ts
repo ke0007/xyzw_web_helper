@@ -67,7 +67,7 @@ export const useTokenStore = defineStore('tokens', () => {
   const connectionLocks = ref<LockCtx>({}) // 连接操作锁，防止竞态条件
   const tokenRefreshFlags = ref<Record<string, boolean>>({}) // Token刷新标志，防止重复处理
 
-  // 游戏数据存储
+  // 游戏数据存储（全局，用于当前选中的 token）
   const gameData = ref({
     roleInfo: null,
     legionInfo: null,
@@ -83,10 +83,34 @@ export const useTokenStore = defineStore('tokens', () => {
     lastUpdated: null as string | null
   })
 
+  // 每个 token 独立的游戏数据存储（用于并行任务）
+  const tokenGameData = ref<Record<string, any>>({})
+
   // 获取当前选中token的角色信息
   const selectedTokenRoleInfo = computed(() => {
     return gameData.value.roleInfo
   })
+
+  // 获取或初始化指定 token 的游戏数据
+  const getTokenGameData = (tokenId: string) => {
+    if (!tokenGameData.value[tokenId]) {
+      tokenGameData.value[tokenId] = {
+        roleInfo: null,
+        legionInfo: null,
+        presetTeam: null,
+        battleVersion: null,
+        studyStatus: {
+          isAnswering: false,
+          questionCount: 0,
+          answeredCount: 0,
+          status: '',
+          timestamp: null
+        },
+        lastUpdated: null
+      }
+    }
+    return tokenGameData.value[tokenId]
+  }
 
   const readStatisticsValue = (stats: any, key: string) => {
     if (!stats) return undefined
@@ -412,12 +436,20 @@ export const useTokenStore = defineStore('tokens', () => {
         syncRandomSeedFromStatistics(tokenId, body, client)
       }
 
+      // 判断是否是当前选中的 token
+      const isSelectedToken = selectedTokenId.value === tokenId
+      
+      // 如果是当前选中的 token，使用全局 gameData；否则使用 token 独立数据
+      const targetGameData = isSelectedToken 
+        ? gameData 
+        : ref(getTokenGameData(tokenId))
+
       emitPlus(cmd, {
         tokenId,
         body,
         message,
         client,
-        gameData
+        gameData: targetGameData
       })
 
       gameLogger.gameMessage(tokenId, cmd, !!body)
@@ -913,9 +945,18 @@ export const useTokenStore = defineStore('tokens', () => {
 
       // 手动更新游戏数据（因为响应可能不会自动触发消息处理）
       if (roleInfo) {
-        gameData.value.roleInfo = roleInfo
-        gameData.value.lastUpdated = new Date().toISOString()
-        gameLogger.verbose('角色信息已通过 Promise 更新')
+        // 更新全局数据（用于当前选中的 token）
+        if (selectedTokenId.value === tokenId) {
+          gameData.value.roleInfo = roleInfo
+          gameData.value.lastUpdated = new Date().toISOString()
+        }
+        
+        // 同时更新 token 独立的数据（用于并行任务）
+        const tokenSpecificData = getTokenGameData(tokenId)
+        tokenSpecificData.roleInfo = roleInfo
+        tokenSpecificData.lastUpdated = new Date().toISOString()
+        
+        gameLogger.verbose(`角色信息已更新 [${tokenId}]`)
       }
 
       return roleInfo
@@ -1279,6 +1320,12 @@ export const useTokenStore = defineStore('tokens', () => {
   const disconnectTokenForBatch = async (tokenId: string) => {
     wsLogger.info(`批量任务断开: ${tokenId}`)
     await closeWebSocketConnectionAsync(tokenId)
+    
+    // 清理 token 独立的游戏数据，释放内存
+    if (tokenGameData.value[tokenId]) {
+      delete tokenGameData.value[tokenId]
+      wsLogger.debug(`已清理 token 独立数据: ${tokenId}`)
+    }
   }
 
   return {
@@ -1287,6 +1334,7 @@ export const useTokenStore = defineStore('tokens', () => {
     selectedTokenId,
     wsConnections,
     gameData,
+    tokenGameData, // 导出 token 独立数据
 
     // 计算属性
     hasTokens,
@@ -1337,6 +1385,9 @@ export const useTokenStore = defineStore('tokens', () => {
     getBattleVersion,
     setBattleVersionForConnection,
     getBattleVersionForConnection,
+
+    // Token 独立数据管理
+    getTokenGameData,
 
     // 批量任务专用方法
     connectTokenForBatch,
