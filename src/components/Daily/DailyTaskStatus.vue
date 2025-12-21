@@ -566,8 +566,8 @@ const executeDailyTasks = async (roleInfoResp, logFn, progressFn) => {
       execute: async () => {
         logFn('开始竞技场战斗流程')
 
-        if (new Date().getHours() < 8) {
-          logFn('当前时间未到8点，跳过竞技场战斗', 'warning')
+        if (new Date().getHours() < 6) {
+          logFn('当前时间未到6点，跳过竞技场战斗', 'warning')
           return
         }
 

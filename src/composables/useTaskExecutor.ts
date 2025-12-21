@@ -261,8 +261,8 @@ export function useTaskExecutor() {
             logFn('开始竞技场战斗流程')
 
             const currentHour = new Date().getHours()
-            if (currentHour < 8) {
-              logFn('当前时间未到8点，跳过竞技场战斗', 'warning')
+            if (currentHour < 6) {
+              logFn('当前时间未到6点，跳过竞技场战斗', 'warning')
               return
             }
 
@@ -389,8 +389,6 @@ export function useTaskExecutor() {
               { genieId: gid }, `${kingdoms[gid - 1]}灯神免费扫荡`)
           })
         }
-      }
-
       // 灯神免费扫荡卷
       for (let i = 0; i < 3; i++) {
         taskList.push({
