@@ -389,6 +389,8 @@ export function useTaskExecutor() {
               { genieId: gid }, `${kingdoms[gid - 1]}灯神免费扫荡`)
           })
         }
+      }
+      
       // 灯神免费扫荡卷
       for (let i = 0; i < 3; i++) {
         taskList.push({
@@ -436,6 +438,7 @@ export function useTaskExecutor() {
 
       for (let i = 0; i < taskList.length; i++) {
         const task = taskList[i]
+        if (!task) continue // 安全检查
 
         try {
           await task.execute()

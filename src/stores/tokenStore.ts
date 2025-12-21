@@ -273,6 +273,12 @@ export const useTokenStore = defineStore('tokens', () => {
 
     // 更新选中状态
     selectedTokenId.value = tokenId
+    
+    // 同步 token 独立数据到全局数据（如果存在）
+    if (tokenGameData.value[tokenId]) {
+      gameData.value = { ...tokenGameData.value[tokenId] }
+      tokenLogger.debug(`已同步 token 独立数据到全局: ${tokenId}`)
+    }
 
     // 选中新的Token后，断开其他已存在的连接，保证单一连接
     disconnectOtherConnections(tokenId)
@@ -451,6 +457,11 @@ export const useTokenStore = defineStore('tokens', () => {
         client,
         gameData: targetGameData
       })
+      
+      // 如果是当前选中的 token，同步更新到 token 独立数据，保持一致性
+      if (isSelectedToken && tokenGameData.value[tokenId]) {
+        tokenGameData.value[tokenId] = { ...gameData.value }
+      }
 
       gameLogger.gameMessage(tokenId, cmd, !!body)
 
